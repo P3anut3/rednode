@@ -3,6 +3,15 @@
 
 # 但是，不忽略 .gitignore 文件本身
 !.gitignore
+!AGENTS.md
 
 # 不忽略 src 文件夹
 !src
+
+# 实验代码和实验文档需要纳入版本管理；大体积 results/ 仍保持忽略。
+!experiments/
+!experiments/**
+
+# Python 运行时缓存不属于实验源码。
+**/__pycache__/
+*.py[cod]
