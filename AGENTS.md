@@ -37,3 +37,10 @@
 - 每完成或重新组织一个实验，同步更新 `experiments/SUMMARY_ZH.md`，用中文记录实验目标、关键数字、结论和产物路径。
 - 完成路径调整后，至少执行 Python 语法检查、各 `run.py --help` 导入检查（如支持）和 `git diff --check`。
 - 不得为验证目录调整而默认重跑全量训练、全库 embedding 或昂贵检索。
+
+## 冻结 Baseline Release
+
+- 用户明确确认的正式 baseline 必须在对应实验结果目录下创建带版本的快照：`baseline_releases/vN_<baseline_name>/`。
+- 冻结快照至少包含 embedding、index、ID mapping、model checkpoint、配置、正式评估结果、代码快照、README 和 `SHA256SUMS`。
+- baseline release 是 append-only：不得覆盖、重写、删除或将新结果混入已冻结版本。任何变化必须新建 `vN+1` 或新 baseline ID。
+- 冻结前必须校验 embedding/index/mapping 数量和维度一致，计算 SHA-256；冻结后将目录设为只读。
