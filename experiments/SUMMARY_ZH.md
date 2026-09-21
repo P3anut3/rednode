@@ -66,3 +66,19 @@
 | `phase_04/experiment_02_history_n20_multi_interest/` | `results/phase_04/experiment_02_history_n20_multi_interest/` |
 | `phase_05/experiment_01_request_hard_negative_mining/` | `results/phase_05/experiment_01_request_hard_negative_mining/` |
 | `phase_05/experiment_02_bias_aware_hard_negative_training/` | `results/phase_05/experiment_02_bias_aware_hard_negative_training/` |
+
+## Phase 6：ID 协同召回与 Content-ID Residual
+
+- 目标：验证 Pure-ID 独立路线与 frozen-content ID residual。
+- Pure-ID 最佳 validation R@500：2.1812%。
+- M2 residual：No-Go；warm paired-bootstrap CI 为负。
+- Terminal 最佳 R@500：8.4774%（quota_300_100_100）。
+- 产物：`results/phase_06/experiment_01_id_two_tower_retrieval/summary.md`。
+
+## Phase 7：Feature-enhanced Hybrid Two-Tower（待执行）
+
+- 目标：在冻结 BGE、固定 128 维和既有 loss 协议下，以匹配的 `user ID + history-ID Attention` B0 为控制组，分别验证稳定用户画像、fans/follows、物品结构特征和受 mask 约束的 ID residual。
+- 受控比较：B1a/B1b/B2/B3 均相对 B0；H1 相对 H0、H2 相对 H1、H3 相对 H2。Stage B 额外屏蔽 same-user batch false negatives。
+- 状态：代码实现和合成自检已完成，尚未生成真实缓存、运行真实 smoke、训练或读取 test；所有执行 stage 需要人工审核后显式传入 `--confirm-run`。
+- 代码：`experiments/phase_07/experiment_01_feature_hybrid_two_tower/`。
+- 结果：`results/phase_07/experiment_01_feature_hybrid_two_tower/`。
