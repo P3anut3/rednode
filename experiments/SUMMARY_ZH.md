@@ -75,10 +75,48 @@
 - Terminal 最佳 R@500：8.4774%（quota_300_100_100）。
 - 产物：`results/phase_06/experiment_01_id_two_tower_retrieval/summary.md`。
 
-## Phase 7：Feature-enhanced Hybrid Two-Tower（待执行）
+## Phase 7 / Experiment 01：Feature-enhanced Hybrid Two-Tower
 
-- 目标：在冻结 BGE、固定 128 维和既有 loss 协议下，以匹配的 `user ID + history-ID Attention` B0 为控制组，分别验证稳定用户画像、fans/follows、物品结构特征和受 mask 约束的 ID residual。
-- 受控比较：B1a/B1b/B2/B3 均相对 B0；H1 相对 H0、H2 相对 H1、H3 相对 H2。Stage B 额外屏蔽 same-user batch false negatives。
-- 状态：代码实现和合成自检已完成，尚未生成真实缓存、运行真实 smoke、训练或读取 test；所有执行 stage 需要人工审核后显式传入 `--confirm-run`。
+- 目标：在冻结 BGE、固定 128 维和既有 loss 协议下，验证画像、物品结构特征和受 mask 约束的 ID residual。
+- Pure-ID：B3 三 seed validation R@500 均值 3.6733%，明显优于匹配 B0 的 2.5014%；物品结构特征贡献大于用户画像。
+- Hybrid：H0/H1/H2 seed42 validation R@500 为 8.5410%/8.8315%/9.5106%；H2 三 seed均值 9.5441%。H3 匿名 dense 特征降至 9.2747%，不保留。
+- 唯一一次 terminal test：锁定 H2 seed42，R@100/R@500 为 3.8618%/8.7028%；completely-unseen R@500 为 10.4802%。
+- 工程：128 维 198 万 corpus 常驻单卡 GPU，terminal exact search 1.053 秒；本实验未运行融合。
 - 代码：`experiments/phase_07/experiment_01_feature_hybrid_two_tower/`。
-- 结果：`results/phase_07/experiment_01_feature_hybrid_two_tower/`。
+- 结果：`results/phase_07/experiment_01_feature_hybrid_two_tower/summary.md`。
+
+## Phase 7 / Experiment 02：Concat Fusion 消融
+
+- 目标：在其余协议冻结的情况下比较 ID64 Direct Concat MLP 与 ID64 Concat MLP + Residual，判断 residual 是否保护内容与 cold recall。
+- 控制：输出和全库索引仍为 128 维；history N=20、Frozen BGE、side features、Phase 5 TF-IDF hard-negative loss均不变；不使用图片、匿名 dense、位置或全周期行为统计。
+- Seed42 validation：M1 Direct Concat R@500=0.5506%；M2 Residual Concat R@500=6.5028%，M2-M1 paired-bootstrap 95% CI 为 `[+5.6003,+6.3276]pp`。
+- M2 三 seed validation R@500=6.5028%/6.4646%/6.4711%，均值 6.4795%、std 0.0167pp，稳定但明显低于现有 H2 三 seed均值 9.5441%。
+- 条件控制：因 M1/M2 均低于 H2，补跑 Add-ID64 seed42；R@500=8.9520%。相对 H2 seed42，overall -0.5586pp、target-seen +0.2187pp、completely-unseen -0.9476pp。
+- 决策：Concat 结构 No-Go；ID64 Add 控制也未达到替换标准，继续保留 Experiment 01 的 Add-ID128 H2。没有读取 terminal test，避免为落后候选消耗 test。
+- 代码：`experiments/phase_07/experiment_02_concat_fusion_ablation/`。
+- 结果：`results/phase_07/experiment_02_concat_fusion_ablation/summary.md`。
+
+## Phase 7 / Experiment 03：作者式 Concat 与 ID 正则消融
+
+- 目标：解释 Experiment 02 Direct Concat 的 0.5506% R@500 是否来自融合前的 Content 768→128 信息瓶颈，并独立验证 ID64→ID32、小初始化和 Structured ID Dropout。
+- 结构：E1–E7 受控消融；完整作者式物品塔直接拼接 BGE768 + metadata128 + ID32 + seen flag，经 929→512→128 MLP；用户塔为 history128 + profile128 + ID32 + seen flag，经 289→512→128 MLP。
+- 诊断：为每个 best checkpoint 固定计算 Item-ID-off、User-ID-off、All-ID-off、按互斥 temporal/frequency bucket 的 ID-on/off 表示稳定性，以及每 epoch target/history/user 的实际整路 dropout 比例；dropout 同时关闭 ID 向量和 seen flag，以匹配真实 cold 输入。
+- 安全门禁：E0 只读取 Experiment 02，不重训；所有执行阶段需 `--confirm-run`；训练/验证通过 completion marker 与 SHA-256 绑定；仅验证 gate 全部通过才允许一次 terminal test。
+- Seed42 validation：E0/E1/E2/E3/E4/E5/E6/E7 R@500 分别为 0.5506%/1.0487%/0.5305%/0.5497%/2.5115%/0.5015%/2.8738%/3.2898%。Raw BGE768、ID32 和小初始化均未单独修复 Direct Concat；Structured ID Dropout 是主要有效因素。
+- 最佳 E7 Full-P50 三 seed R@500 为 3.2898%/3.2585%/3.4463%，均值 3.3315%、std 0.0821pp，明显低于 H2 三 seed均值 9.5441%。E7 vs H2 overall paired delta = -6.2208pp，95% CI `[−6.6265,−5.8409]pp`。
+- ID-off：E7 normal/Item-ID-off/User-ID-off/All-ID-off R@500 = 3.2898%/3.7674%/3.2302%/3.7511%，说明模型没有依靠 ID shortcut，但 Direct Concat 主结构本身远弱于 Add H2。
+- 决策：**No-Go**。terminal gate 仅 All-ID-off 保留率通过，其余四项失败；未读取 test，继续保留 Experiment 01 的 H2。
+- 代码：`experiments/phase_07/experiment_03_author_concat_regularization_ablation/`。
+- 结果：`results/phase_07/experiment_03_author_concat_regularization_ablation/summary.md`。
+
+## Phase 7 / Experiment 04：H2 检索维度消融
+
+- 目标：用 H0/H1/H2 的 128d/256d 2×3 对照判断最终 retrieval space 是否存在容量瓶颈。
+- 控制：仅训练 H0/H1/H2-256；128d 直接读取 Experiment 01 正式结果和 rankings。ID embedding保持128d，类别embedding保持16d，numeric hidden保持32d。
+- 协议：完全复用 temporal train、N20、Frozen BGE、side features、TF-IDF HN、InfoNCE、proxy和全库GPU exact evaluator。
+- Seed42 validation：H0/H1/H2-256 R@500 = 9.4083%/9.8353%/9.8098%，相对对应128d提升 +0.8672pp/+1.0038pp/+0.2992pp，三种结构均受益，说明128d存在普遍容量瓶颈。
+- H2-256 三 seed R@500 = 9.8098%/9.9023%/9.9521%，均值9.8881%、std 0.0590pp；overall paired-bootstrap 95% CI `[+0.0325,+0.5736]pp`。
+- 唯一 terminal test：锁定中位 seed43，R@100/R@500 = 3.9854%/9.0231%，相对 H2-128 terminal 8.7028%提升 +0.3203pp。
+- 工程：256d全库item vectors为1.892 GiB，validation exact search约1.60s，峰值显存约4.22 GiB；全部预注册gate通过，结论为 **GO，升级256d**。
+- 代码：`experiments/phase_07/experiment_04_h2_retrieval_dimension_ablation/`。
+- 结果：`results/phase_07/experiment_04_h2_retrieval_dimension_ablation/summary.md`。
