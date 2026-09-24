@@ -120,3 +120,12 @@
 - 工程：256d全库item vectors为1.892 GiB，validation exact search约1.60s，峰值显存约4.22 GiB；全部预注册gate通过，结论为 **GO，升级256d**。
 - 代码：`experiments/phase_07/experiment_04_h2_retrieval_dimension_ablation/`。
 - 结果：`results/phase_07/experiment_04_h2_retrieval_dimension_ablation/summary.md`。
+
+## Phase 8 / Experiment 01：冻结图片 Embedding 基础设施
+
+- 目标：以 canonical item mapping 为唯一行顺序，用本地 `google/siglip-base-patch16-224` 对 `notes.image_path` 全量图片生成可断点、可校验的逐图 embedding，并派生 first/top3/all 三种确定性 pooling。
+- 存储：CSR `note_ids + image_offsets`、每 100,000 图片一个 manifest/embedding shard、逐图 float16 768d、单独 valid mask；不构造 item×max_images 稠密张量。
+- 安全：CUDA-only 正式编码、`local_files_only=True`、逐 shard 原子写与 SHA-256 marker、unsafe path 阻断、坏图零向量但显式记录、recommendation test 不读取。
+- 状态：修复 collate 只传行号/格式/错误元数据与处理 tensor，并在异常退出时回收 DataLoader workers；加入进程树 RSS、主机 available、swap、worker 数监控和保守资源门限。Audit 完成：1,983,938 items、4,989,332 image paths、1,071,532 items with images、912,406 without、unsafe/duplicate path 均为0，10k sampled paths 全存在。GPU smoke 三组：batch64/workers0 14.93 img/s、峰值 RSS 2.43 GiB；workers1 15.72 img/s、3.47 GiB；workers2/prefetch1 27.30 img/s、5.97 GiB；三组均10k成功、0失败，主机 available 约200 GiB且稳态FD增量0。单卡 shard0 100k/100k 成功，27.60 img/s，约60.4分钟，峰值进程树RSS 5.98 GiB，marker及embedding/mask/manifest/failure hashes校验通过。双卡独立会话 canary 各运行约30k后按用户要求安全中止，未写正式 marker；未扩至四卡。全量 extraction、finalize、pooling、validate 未完成，recommendation test 未读取。
+- 代码：`experiments/phase_08/experiment_01_image_embedding_extraction/`。
+- 计划结果：`results/phase_08/experiment_01_image_embedding_extraction/`。
