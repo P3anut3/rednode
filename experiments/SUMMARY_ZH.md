@@ -126,6 +126,42 @@
 - 目标：以 canonical item mapping 为唯一行顺序，用本地 `google/siglip-base-patch16-224` 对 `notes.image_path` 全量图片生成可断点、可校验的逐图 embedding，并派生 first/top3/all 三种确定性 pooling。
 - 存储：CSR `note_ids + image_offsets`、每 100,000 图片一个 manifest/embedding shard、逐图 float16 768d、单独 valid mask；不构造 item×max_images 稠密张量。
 - 安全：CUDA-only 正式编码、`local_files_only=True`、逐 shard 原子写与 SHA-256 marker、unsafe path 阻断、坏图零向量但显式记录、recommendation test 不读取。
-- 状态：修复 collate 只传行号/格式/错误元数据与处理 tensor，并在异常退出时回收 DataLoader workers；加入进程树 RSS、主机 available、swap、worker 数监控和保守资源门限。Audit 完成：1,983,938 items、4,989,332 image paths、1,071,532 items with images、912,406 without、unsafe/duplicate path 均为0，10k sampled paths 全存在。GPU smoke 三组：batch64/workers0 14.93 img/s、峰值 RSS 2.43 GiB；workers1 15.72 img/s、3.47 GiB；workers2/prefetch1 27.30 img/s、5.97 GiB；三组均10k成功、0失败，主机 available 约200 GiB且稳态FD增量0。单卡 shard0 100k/100k 成功，27.60 img/s，约60.4分钟，峰值进程树RSS 5.98 GiB，marker及embedding/mask/manifest/failure hashes校验通过。双卡独立会话 canary 各运行约30k后按用户要求安全中止，未写正式 marker；未扩至四卡。全量 extraction、finalize、pooling、validate 未完成，recommendation test 未读取。
+- 结果：Audit 为 1,983,938 items、4,989,332 image paths、1,071,532 有图、912,406 无图，unsafe/duplicate path 均为0，10k 抽样路径全存在。保守 GPU smoke（batch64/workers2）为 27.30 img/s，10k 图片全部成功。双卡全量提取完成 50/50 shard，成功 4,989,332、失败 0；逐图 768d float16 向量约 7.137 GiB。First、Mean Top3、Mean All 三份物品向量均为 1,983,938 × 768 float16，各约 2.838 GiB；每份有图 1,071,532、无图 912,406。全量 shard hash、模型 fingerprint、canonical mapping、三策略 1,000 物品抽样复算均通过；未读取 recommendation test、未训练推荐模型。
 - 代码：`experiments/phase_08/experiment_01_image_embedding_extraction/`。
-- 计划结果：`results/phase_08/experiment_01_image_embedding_extraction/`。
+- 结果：`results/phase_08/experiment_01_image_embedding_extraction/summary.md`。
+
+## Phase 8 / Experiment 02：冻结图片特征对 H2-256 召回的增益
+
+- 目标：在 Phase 7-04 H2-256 的训练、loss、特征和全库评估协议不变时，只增加冻结 SigLIP 图片投影，比较首图、前三图均值、全部图均值对总体、有图/无图和冷物品召回的影响。
+- 对照：直接引用同 seed 的 H2-256 正式 validation JSON 与 per-request ranking；图片输入只读复用 Phase 8-01 三份 pooled embedding，不重新运行视觉模型。
+- 结果：Review 确认旧协议 validation cold_item 三 seed 均无 eligible request，故报告 N/A，并以 completely_unseen 作为冷启动门禁。Audit：train 254,583 positives 中 115,012 有图（45.18%）；validation 47,733 positives 中 20,738 有图（43.45%）。2-worker smoke 在进程树 RSS 16.01 GiB 被安全终止，0-worker 单卡 smoke 三策略均通过；正式训练保持 0 workers 与内存/GPU/磁盘保护线。Seed42 全库 validation：首图/Top3/Mean All R@500 为 9.8304%/9.8677%/9.9032%，同 seed H2-256 为 9.8098%。Mean All 三 seed 平均 9.9757%，相对配对 H2-256 平均 +0.0876pp，overall bootstrap 95% CI 跨零；有图正样本 +0.6668pp，无图正样本 -0.4689pp，completely-unseen 非劣效门槛未通过。**No-Go，不接入 H2-256；terminal test 未读取。** 图片资产保留供后续研究。
+- 代码：`experiments/phase_08/experiment_02_image_hybrid_recall/`。
+- 结果：`results/phase_08/experiment_02_image_hybrid_recall/summary.md`。
+
+## Phase 8 / Experiment 03：图文融合与受控残差
+
+- 目标：固定 H2-256、mean_all 冻结图片和 Phase 8-02 训练协议，比较逐物品门控 F1、投影后图文交互 F2、原始 768d 图文交互 F3。三者显式复制同一 A0 起点并共享图片基础路径；重点检验有图收益是否可在不损害无图与 completely-unseen 的条件下保留。
+- 结果：Audit、三模型 smoke 与 seed42 正式全库 validation 完成。F1/F2/F3 起始 item/query 与 A0 数值等价（最大差约3e-8），无图图片增量严格为0。F1/F2/F3 R@500=9.8747%/9.8314%/10.0350%，同 seed C0=9.8098%、A0=9.9032%；但无图相对 C0 分别下降0.5841pp/1.0629pp/0.7281pp，全部违反预设0.1pp初筛。**No-Go：不补 seed43/44，不读取 test，不替代 H2-256。** F3 的只读机制诊断显示关闭历史侧图片后无图 R@500 从7.6760%升至8.9025%，提示 query 变化可能是重要来源；该分布外干预不能当作正式模型结果。未清理或覆盖 Phase 8-01/02。
+- 代码：`experiments/phase_08/experiment_03_image_text_fusion_ablation/`。
+- 结果：`results/phase_08/experiment_03_image_text_fusion_ablation/summary.md`。
+
+## Phase 8 / Experiment 04：作者式 DSSM 与逐历史 I2I 对照
+
+- 状态：**已撤回**。源码审计发现 D 复用了 Phase7-03 文本-only 简化模型，缺少作者的图片路径、多模态历史摘要及 BiGRU，并增加了原作者模型没有的 seen 输入；不能据此判断作者实际 DSSM 的效果。训练中 ID 可用性与正负标签相关，疑似导致模型学到 ID 可用性捷径，尚未通过因果消融确认。
+- 按用户要求删除本实验整个结果目录（含 checkpoint、向量、KNN、ranking、marker、debug 和旧报告）。旧代码仅保留作实现差异审计，不应继续运行或引用旧指标。Phase7 和 Phase8-01/02/03 资产不受影响。
+- 重做方案：`experiments/phase_08/experiment_04_dssm_i2i_recall_comparison/REDESIGN_PLAN_ZH.md`。后续须新建 Experiment 05，按锁定作者源码实现图文 concat、原始离散特征及多模态序列分支，先验证前向等价，再执行 temporal validation。
+- 代码：`experiments/phase_08/experiment_04_dssm_i2i_recall_comparison/`。
+- 结果：旧产物已删除；本实验不再提供正式指标或可引用结论。
+
+## Phase 8 / Experiment 05：作者图文 DSSM 与 ID Dropout 消融
+
+- 目标：使用固定作者源码 `39b7767372e46dfa5cd20b689d1c31a6d608ea69` 的真实图文concat及768d历史摘要+128d BiGRU，区分F作者快照字段参考、S保守时间安全数值协议、图片和整路ID dropout的作用；继续研究D/DI/C在固定Top500下的净新增命中。
+- 结构：直接加载hash锁定的作者纯模型类；Item1659→512→128、User1002→512→128，Linear/ReLU，不增加seen输入、metadata encoder或融合残差。Item ID覆盖canonical目录，User/类别/norm train-only；复用冻结BGE与SigLIP mean_all，不重新提取。
+- 矩阵：A0/A1=F图文dropout0/.5，B0/B1=S图文0/.5，T0/T1=S图片槽置零0/.5；六组同seed初始权重与proxy一致，dropout RNG独立。作者easy in-batch温度.07、AdamW1e-3/wd1e-2、batch768、最多3epoch；false negative先审计而不暗中修改objective。
+- 状态：**validation实验完成并停止，14组训练/全库validation/诊断、三seed多路与报告全部完成。** Audit 验证 train254,583、validation47,733 positives/13,594 requests、canonical1,983,938，历史与当前目标重叠为0。六组同seed初始化hash一致，作者与本地item/user前向最大差均为0.0。2026-10-02重新验证所有正式完成产物及报告46项依赖hash通过。F动态快照时间未验证，S静态快照假设明确披露，不宣称完整复现作者公开指标。
+- 安全：无test入口；完成marker绑定代码/feature/checkpoint/vector/mapping/ranking，GPU resident exact、workers0、资源与deadline保护；旧Phase8-04指标/checkpoint不恢复。
+- 代码：`experiments/phase_08/experiment_05_author_multimodal_dssm_recall/`；契约：同目录`source_parity.md`。
+- Review流程修正：B0/B1按三seed均值选型；T seed42胜出必须补43/44，单seed不能成为最终D。DI/C正式口径保留180排序仅补不足500，深层重排另列诊断；多路按seed隔离，稳定结论要求同一quota/RRF配置三个seed。中文report补同seed H2、ID-off、cold/无图风险、输入尺度/梯度及训练/encoding/retrieval资源表。
+- 结果：三seed A0/A1 R@500=4.6205%/4.3071%，B0/B1=2.5840%/2.3582%；ID dropout0.5在F/S两组均退化，completely-unseen也下降。安全D选择B0；DI=2.5088%，BGE-I2I=5.5671%，D+DI RRF=2.7468%，D+C RRF=4.7253%，明显弱于H2-256 validation均值9.8881%。H2+BGE-I2I 450/50为9.9310%，仅+0.0429pp，95%CI[−0.0422,+0.1266]pp；扩大I2I配额和RRF退化。**不替换H2，暂不新增正式I2I路；未读取test。**
+- 运行修复：默认AMP scale溢出，修复为降scale后同batch/同ID mask重试，保持模型/loss/采样不变；旧已完成marker/hash不覆盖，失败组归档。累计记录5次成功重试。数值修复记录在`debug/numerical_recovery/`。
+- 产物：`results/phase_08/experiment_05_author_multimodal_dssm_recall/summary.md`（完整指标）；同目录`analysis_summary_zh.md`（中文结论）。结果约33GiB，14组训练阶段wall合计约2.35小时，不含验证、多路、停机等待。阶段结束，不自动开启新实验。

@@ -470,7 +470,7 @@ def report() -> str:
         "## 正式提取", "",
         f"- 成功 / 失败：{extraction['valid_count']:,} / {extraction['invalid_count']:,}",
         f"- Shard：{extraction['shard_count']}，逐图 embedding 总大小：{embedding_size / 2**30:.3f} GiB。",
-        f"- 四 worker 墙钟近似 / 累计 GPU worker 时间：{extraction_seconds:.1f}s / {sum_gpu_seconds:.1f}s。", "",
+        f"- 最长 worker 累计 shard 耗时 / 全部 shard 累计处理耗时：{extraction_seconds:.1f}s / {sum_gpu_seconds:.1f}s（含单卡 canary；非严格墙钟时间）。", "",
         "## Pooling", "",
         "| Strategy | Available | Missing | Fallback | Size (GiB) |",
         "|---|---:|---:|---:|---:|",

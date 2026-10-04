@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/WBoxian/Rednote-Qilin-Search-Rec-System",
+  "commit": "39b7767372e46dfa5cd20b689d1c31a6d608ea69",
+  "files": {
+    "dssm_trainer.py": "2336bcd99a3cf62a76e35e8e2c2e9733981f91ecc2b9ffce4896f8bf0abd4c07",
+    "build_multiroute_recall.py": "a1daaf393c2549d633cc74db7f963fa258d7e3ff866594191441099eaa4ed13e",
+    "build_features.py": "ada2032a78bfc122d9f7c932eb82b8626df6d583a3d00a58620661effe46c34e",
+    "build_note_text_emb.py": "7e4f38268be56fb27b24735a127f0ee7e6b063ec2976934eb278da8e7145993f",
+    "build_note_image_emb.py": "39e9b909dcedaf63fced1e0e50545384cab2302498f665aa8236aa38fd7b918c"
+  }
+}

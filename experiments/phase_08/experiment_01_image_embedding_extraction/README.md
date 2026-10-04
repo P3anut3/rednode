@@ -87,4 +87,4 @@ results/phase_08/experiment_01_image_embedding_extraction/
 
 ## 当前结论
 
-当前进度（2026-09-24）：audit 已完成；保守 GPU smoke 的 10k 全部成功；单卡 shard 0 的 100k canary 已完成并通过 marker/hash 校验。双卡 canary 各处理约 30k 后按运行时长要求中止，没有写完成 marker；其临时 shard 文件仍保留且不会被当作正式产物。全量图片提取、finalize、pooling 和 validate 尚未完成，recommendation test 未读取。
+实验已完成（2026-09-27）：50/50 个 shard 全部提取并通过 hash 与模型 fingerprint 校验；4,989,332 张图片均有效，失败 0。三种 pooling 均生成 1,983,938 × 768 的 float16 物品向量，其中 1,071,532 条有图、912,406 条无图。`finalize-extraction`、`validate` 和 1,000 条随机物品的三策略复算均通过。结果见 `results/phase_08/experiment_01_image_embedding_extraction/summary.md`；未读取 recommendation test，未训练推荐模型。
